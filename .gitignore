@@ -2,6 +2,7 @@
 # It holds personal data and a map of who owns what — never commit it.
 # Step 8 says to keep it outside any repository; this is the second line of defence
 # for anyone who installs the skill into a folder that is itself a working tree.
+registry.json
 *registry*.json
 *registro*.json
 browser-accounts.json

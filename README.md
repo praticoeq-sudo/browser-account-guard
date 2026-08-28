@@ -1,85 +1,84 @@
-# browser-account-guard
+# browser-account-guard + flaky-browser-ui
 
-A Claude skill that stops one specific, expensive mistake:
+Two Claude skills for agents that drive web panels. They were one file until it grew past
+400 lines and started loading a browser-automation cookbook into every task that only needed
+to read a dashboard.
+
+| Skill | Answers | Fires when |
+|---|---|---|
+| **`browser-account-guard`** | *Am I in the right account, pointed at the right thing?* | you are about to act in a signed-in panel where more than one account or property could be selected |
+| **`flaky-browser-ui`** | *Why won't this UI obey?* | tabs die between calls, clicks or typed values do not register, a batch died mid-write |
+
+They are independent. The second applies on public pages, in your own account, and under
+Playwright — no account question involved. The first points at it when you need it.
+
+## The mistake this exists to prevent
 
 > **The browser being right does not mean the account is right.**
 
-If you automate logged-in panels — Search Console, Google Ads, Analytics, Business
-Profile/GMB, wp-admin, a domain registrar, Cloudflare, Meta Business — and you work across
-more than one client, more than one browser, or more than one account, you will eventually
-act in the wrong one. This skill makes that hard to do.
+If you automate Search Console, Google Ads, Analytics, Business Profile, wp-admin, a domain
+registrar, Cloudflare or Meta Business, and you work across more than one client, more than
+one browser, or more than one account on the same machine — you will eventually act in the
+wrong one. It rarely announces itself: the page loads, the data looks plausible, nothing
+errors.
 
 ## Where it came from
 
-Real work, not theory. Every rule here is something that failed first:
+Real work, not theory. Every rule is something that failed first:
 
 - A browser correctly identified as client A's opened Search Console under client B's
-  account, because that was the browser's default. One click away from creating a client's
+  account, because that was the browser's default. One click from creating a client's
   property inside another client's account.
-- The Google session index `/u/N/` jumped between `/u/0/` and `/u/3/` on consecutive
+- The Google session index `/u/N/` moved between `/u/0/` and `/u/3/` on consecutive
   navigations in the same browser, on the same day.
-- Browser tabs died between almost every tool call, turning a five-step flow into twenty.
-- A `role=combobox` in Search Console resisted coordinates, `.click()`, full mouse-event
-  sequences and keyboard input — six attempts, all failing.
+- Tabs died between almost every call, turning a five-step flow into twenty.
+- A `role=combobox` in Search Console absorbed six attempts across four techniques before
+  anyone asked whether the UI was the right path at all. **That failure is where the
+  two-attempt budget comes from** — it is the mistake, not a badge.
 
-## What it covers
+## How it was built, and where it still falls short
 
-Nine steps, in order:
+Three rounds of review by independent agents reading the files cold, each given a realistic
+scenario and told to find holes rather than praise. Round 1 scored the original 6/10 and
+found twenty problems. Round 2 scored the revision 8/10 on scenario handling, 6/10 on
+trigger design, 6.5/10 adversarial. Round 3 drove the split you see here.
 
-0. **Does this step need the logged-in session at all?** Public-page work belongs in a
-   separate profile — least privilege, and also correctness (a timing measured in a
-   logged-in profile is contaminated; a screenshot from one leaks PII into the deliverable).
-1. **Establish the expected account and target first.** An assertion without an expected
-   value is theatre. When the registry and the page disagree, the page wins.
-2–3. **Which browser** — the confirmation protocol, marked as harness-specific so it can be
-   skipped by anyone driving their own browser.
-4. **Prove the account** against a source whose only subject is the signed-in identity —
-   never by scanning the page for an e-mail, which passes falsely on any permissions screen.
-5. **Prove the target.** Right account, wrong property is the expensive failure, and it looks
-   like success.
-6. **Force the account**, in order of preference: a profile per organisation, the account
-   chooser, and `?authuser=` only as a last resort.
-7. **Gate the irreversible action.** Identity is not authorisation, consent is per action,
-   and the session can change under you — so re-prove immediately before acting.
-8. **Record it** — with a schema, a verification date, and the rule that it never outranks
-   the page.
+Known open points, stated rather than hidden:
 
-Plus: working across several clients in one run, surviving tabs that die (batching, one
-irreversible action per batch and it goes last, idempotency keys, never re-running a dead
-batch), reactive panels that ignore programmatic input, and a table of **fragile UI path →
-robust path** with the precondition each one needs.
-
-An unattended run is **read-only**. The registry can say which account and which target; it
-cannot supply consent for an irreversible action.
-
-## How it was built
-
-Two rounds of adversarial review by independent agents reading the document cold, each given
-a realistic scenario and told to find holes rather than praise it. Round one scored it 6/10
-and found twenty problems; round two scored the revision 8/10 on scenario handling and 6–6.5
-on trigger design and adversarial review, finding a further set — including a false-positive
-in the account check itself and several factual errors about platform behaviour. Both rounds
-are fixed in what you are reading.
-
-The method generalises: a cold reader evaluates what is *written*, while the author
-evaluates what they *meant*.
+- **Identity proof is strongest on Google.** WordPress, Cloudflare and Meta have one read
+  each; a registrar has none worth trusting. The account-guard skill says so where it
+  matters.
+- **Re-proving costs navigations.** A fifteen-client loop pays for it. The skill offers a
+  cheap in-loop check and an expensive one for writes, but the tension is real.
+- **Steps 2–3 assume a harness that attaches to the user's running browsers.** They are
+  marked skippable for anyone driving their own.
 
 ## Install
 
-Copy the folder into your skills directory:
+Each skill is one folder containing one file. Copy the folders you want into your skills
+directory:
 
 ```
 ~/.claude/skills/browser-account-guard/SKILL.md
+~/.claude/skills/flaky-browser-ui/SKILL.md
 ```
 
-Claude loads it automatically and invokes it when the task matches the description.
+Or fetch a single file directly:
 
-## Adapt it
+```bash
+mkdir -p ~/.claude/skills/browser-account-guard && curl -sL https://raw.githubusercontent.com/praticoeq-sudo/browser-account-guard/main/browser-account-guard/SKILL.md -o ~/.claude/skills/browser-account-guard/SKILL.md
+```
 
-Step 8 asks you to keep a registry mapping browser identifier → account → organization →
-targets. Keep that file **outside** any repository you publish, and add its name to
-`.gitignore` wherever it could be picked up — it holds personal data and a map of who owns
-what.
+Claude loads them automatically and invokes each when the task matches its description.
+
+## The registry
+
+`browser-account-guard` step 8 keeps a registry mapping browser identifier → account →
+organization → targets, at `~/.config/browser-account-guard/registry.json` by default.
+
+**Keep it outside any repository.** It holds personal data and a map of who owns what. The
+`.gitignore` here already covers the usual filenames, because the distance between "I copied
+the folder from the repo" and "I saved my registry next to SKILL.md" is one `git add`.
 
 ```json
 {
