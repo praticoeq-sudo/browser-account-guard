@@ -5,9 +5,9 @@ A Claude skill that stops one specific, expensive mistake:
 > **The browser being right does not mean the account is right.**
 
 If you automate logged-in panels — Search Console, Google Ads, Analytics, Business
-Profile, wp-admin, a domain registrar, Cloudflare, Meta Business — and you work across
-more than one client, more than one browser, or more than one Google account, you will
-eventually create something in the wrong account. This skill makes that hard to do.
+Profile/GMB, wp-admin, a domain registrar, Cloudflare, Meta Business — and you work across
+more than one client, more than one browser, or more than one account, you will eventually
+act in the wrong one. This skill makes that hard to do.
 
 ## Where it came from
 
@@ -20,42 +20,49 @@ Real work, not theory. Every rule here is something that failed first:
   navigations in the same browser, on the same day.
 - Browser tabs died between almost every tool call, turning a five-step flow into twenty.
 - A `role=combobox` in Search Console resisted coordinates, `.click()`, full mouse-event
-  sequences and keyboard input — six attempts, all failing. An HTML meta tag solved the
-  same goal in two minutes without touching the UI.
+  sequences and keyboard input — six attempts, all failing.
 
 ## What it covers
 
 Nine steps, in order:
 
-0. **Does this even need a logged-in browser?** Public-page work belongs in a clean
-   profile — least privilege, and also correctness (a timing measured in a logged-in
-   profile is contaminated; a screenshot from one leaks PII into the deliverable).
+0. **Does this step need the logged-in session at all?** Public-page work belongs in a
+   separate profile — least privilege, and also correctness (a timing measured in a
+   logged-in profile is contaminated; a screenshot from one leaks PII into the deliverable).
 1. **Establish the expected account and target first.** An assertion without an expected
-   value is theatre.
-2–3. **Which browser** — the confirmation protocol, and why arguing with it wastes turns.
-4. **Prove the account** with a DOM read, including what `null` actually means and why a
-   screenshot is not valid evidence here.
-5. **Prove the target.** Right account, wrong property is the expensive failure, and it
-   looks like success.
-6. **Force the account via `?authuser=`** instead of trusting `/u/N/`.
-7. **Gate the irreversible action.** Identity is not authorisation.
-8. **Record it** — and read the registry back at step 1.
+   value is theatre. When the registry and the page disagree, the page wins.
+2–3. **Which browser** — the confirmation protocol, marked as harness-specific so it can be
+   skipped by anyone driving their own browser.
+4. **Prove the account** against a source whose only subject is the signed-in identity —
+   never by scanning the page for an e-mail, which passes falsely on any permissions screen.
+5. **Prove the target.** Right account, wrong property is the expensive failure, and it looks
+   like success.
+6. **Force the account**, in order of preference: a profile per organisation, the account
+   chooser, and `?authuser=` only as a last resort.
+7. **Gate the irreversible action.** Identity is not authorisation, consent is per action,
+   and the session can change under you — so re-prove immediately before acting.
+8. **Record it** — with a schema, a verification date, and the rule that it never outranks
+   the page.
 
-Plus: surviving tabs that die (batching as the default, aim by DOM selector, never re-run a
-batch that died mid-write), reactive panels that ignore programmatic clicks, and a table of
-**fragile UI path → robust path** with the precondition each one needs.
+Plus: working across several clients in one run, surviving tabs that die (batching, one
+irreversible action per batch and it goes last, idempotency keys, never re-running a dead
+batch), reactive panels that ignore programmatic input, and a table of **fragile UI path →
+robust path** with the precondition each one needs.
 
-## How it was tested
+An unattended run is **read-only**. The registry can say which account and which target; it
+cannot supply consent for an irreversible action.
 
-Four independent agents were given the skill cold, with realistic scenarios: a high-stakes
-two-account setup, a single-browser case, a panel that appeared logged out, a dropdown that
-would not respond, and an adversarial review.
+## How it was built
 
-They scored the first version **6/10** and found twenty problems — among them a factual
-error in its own showcase example (the HTML-tag shortcut does not exist for Search Console
-*Domain* properties, which only accept DNS verification), a claim that IndexNow tells
-Google about new pages (it does not), a React recipe that fails on `contenteditable`, and a
-dead locale selector. All twenty are fixed in what you are reading.
+Two rounds of adversarial review by independent agents reading the document cold, each given
+a realistic scenario and told to find holes rather than praise it. Round one scored it 6/10
+and found twenty problems; round two scored the revision 8/10 on scenario handling and 6–6.5
+on trigger design and adversarial review, finding a further set — including a false-positive
+in the account check itself and several factual errors about platform behaviour. Both rounds
+are fixed in what you are reading.
+
+The method generalises: a cold reader evaluates what is *written*, while the author
+evaluates what they *meant*.
 
 ## Install
 
@@ -69,16 +76,19 @@ Claude loads it automatically and invokes it when the task matches the descripti
 
 ## Adapt it
 
-Step 8 asks you to keep a registry mapping browser identifier → account → organization.
-Keep that file **outside** any repository you publish — it holds personal data and a map
-of who owns what. A starting shape:
+Step 8 asks you to keep a registry mapping browser identifier → account → organization →
+targets. Keep that file **outside** any repository you publish, and add its name to
+`.gitignore` wherever it could be picked up — it holds personal data and a map of who owns
+what.
 
 ```json
 {
   "<browser-id>": {
     "nickname": "Studio",
     "account": "you@example.com",
-    "organization": "Your company"
+    "organization": "Your company",
+    "targets": ["sc-domain:example.com", "act_1234567890"],
+    "verified": "2026-08-28"
   }
 }
 ```
