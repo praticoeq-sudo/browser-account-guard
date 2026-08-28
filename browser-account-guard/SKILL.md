@@ -19,6 +19,24 @@ description: Prove the right account AND the right target before acting inside s
 
 **One rule: never infer. Read it back — the account *and* the target — before you act.**
 
+> **Reading is not safe either.** Every gate below applies to reads. Pulling last month's
+> clicks from the wrong property produces a confident, wrong report — and drops one client's
+> data into another client's transcript. Prove the account before you *look*, not only
+> before you *write*.
+
+> **No human available?** (scheduled run, headless, non-interactive.) Steps 1, 3 and 7 need
+> an answer you cannot get. **Stop and report — do not proceed on an assumption.** The
+> registry from step 8 is what makes unattended runs possible; without an entry for this
+> client, an unattended run has no business acting in their account.
+
+## The structural cure, if you can afford it
+
+Everything below is mitigation. The actual fix is **one browser profile per organisation** —
+separate profiles, each signed into exactly one account. Then "which browser" and "which
+account" collapse into a single question, and `authuser` becomes a belt on top of braces.
+
+Do that first if you control the environment. Use the rest when you cannot.
+
 ---
 
 ## Step 0 — Does this need a logged-in browser at all?
@@ -55,7 +73,7 @@ Every check below is an assertion. **An assertion without an expected value is t
 You may also enumerate what is available before asking:
 
 ```
-https://accounts.google.com/            → accounts signed into this browser
+https://accounts.google.com/AccountChooser → accounts signed into this browser
 GET /wp-json/wp/v2/users/me?context=edit → WordPress identity + capabilities
 GET /client/v4/user  and  /client/v4/accounts → Cloudflare identity + tenants
 ```
@@ -82,23 +100,28 @@ It may fail once with *"no browser responded"* — transient. Retry once before 
 
 ## Step 4 — Prove the account
 
+**Do not enumerate languages** — that is a race you lose. Google's account chip always puts
+the address in the label, in every locale. Match on the `@` instead:
+
 ```js
-document.querySelector('[aria-label*="Google Account"],[aria-label*="Conta del"],'
-  + '[aria-label*="Conta do Google"],[aria-label*="Compte Google"]')
-  ?.getAttribute('aria-label')
+[...document.querySelectorAll('[aria-label]')]
+  .map(el => el.getAttribute('aria-label'))
+  .find(l => /[\w.+-]+@[\w.-]+\.\w+/.test(l))
 ```
 
 It must name the account you established in step 1. **If it does not, stop.**
 
-**`null` is not "logged out".** It means *the selector did not match*, which happens when:
-the UI is in a language you did not cover, the account chip sits inside an iframe, or you
-are on an account-chooser screen. Disambiguate with a source that does not depend on the
-panel's markup:
+**`undefined`/`null` is not "logged out".** It means *nothing matched*, which happens when
+the chip sits inside an iframe, the page is an account chooser, or the markup changed.
+Disambiguate with a source that does not depend on that panel's markup:
 
 ```
-https://myaccount.google.com/   → read the e-mail directly
-https://accounts.google.com/    → list every account in this browser
+https://myaccount.google.com/                → the signed-in address, rendered
+https://accounts.google.com/AccountChooser   → every account in this browser
 ```
+
+⚠️ `https://accounts.google.com/` alone does **not** list accounts — with one account
+signed in it just redirects to `myaccount`.
 
 **If the expected account is not signed in anywhere:** stop and hand back to the user.
 Do not type credentials. "Fix it" means re-navigating with the right `authuser`, switching
@@ -145,6 +168,12 @@ that changes the URL**, not only at the start.
 
 ⚠️ `authuser` proves the **Google login**. Under an MCC or a multi-tenant panel, the
 *account being operated* is a separate thing — that is step 5.
+
+⚠️ **This step can break step 4.** Putting an e-mail in the URL is exactly the "sensitive
+data in the query string" that makes some harnesses refuse to read the DOM. If your account
+check starts coming back blocked, navigate once with `authuser`, let it redirect to a clean
+URL, and run the check there. The address also lands in browser history and in any
+screenshot of the address bar — one more reason not to leave it on screen.
 
 ## Step 7 — Gate the irreversible action
 
@@ -236,7 +265,7 @@ Check first — otherwise you are trading a slow path for a dead end.
 |---|---|---|---|
 | Verify a site in Search Console | DNS-provider menu | **HTML tag** in `<head>` — but see the trap below | you control the site's HTML |
 | Same, for a Domain property | — | **TXT record via the DNS API** | API token for that zone |
-| Tell **Bing/Yandex/Seznam** about new pages | request indexing one by one | **IndexNow** API — no quota | a key file at the site root |
+| Tell **Bing/Yandex/Seznam** about new pages | request indexing one by one | **IndexNow** API | a key file at the site root; ~10k URLs per request |
 | Read public social content | scroll the logged-in feed | the platform's **public API** | app credentials |
 | Change DNS | registrar panel | the provider's **API** | zone token |
 | Publish content | paste into the editor | the CMS **REST API** | app password / token |

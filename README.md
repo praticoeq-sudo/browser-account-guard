@@ -25,13 +25,37 @@ Real work, not theory. Every rule here is something that failed first:
 
 ## What it covers
 
-- The confirmation protocol when several browsers are connected — and why arguing with it
-  wastes turns.
-- **Proving** the account with a DOM read before acting, instead of inferring it.
-- Forcing the right account through `?authuser=` instead of trusting `/u/N/`.
-- Surviving tabs that die: batching as the default, and how to recover.
-- Reactive panels that ignore programmatic clicks, and the native-setter recipe.
-- A table of **fragile UI path → robust path**, which is the part that saves the most time.
+Nine steps, in order:
+
+0. **Does this even need a logged-in browser?** Public-page work belongs in a clean
+   profile — least privilege, and also correctness (a timing measured in a logged-in
+   profile is contaminated; a screenshot from one leaks PII into the deliverable).
+1. **Establish the expected account and target first.** An assertion without an expected
+   value is theatre.
+2–3. **Which browser** — the confirmation protocol, and why arguing with it wastes turns.
+4. **Prove the account** with a DOM read, including what `null` actually means and why a
+   screenshot is not valid evidence here.
+5. **Prove the target.** Right account, wrong property is the expensive failure, and it
+   looks like success.
+6. **Force the account via `?authuser=`** instead of trusting `/u/N/`.
+7. **Gate the irreversible action.** Identity is not authorisation.
+8. **Record it** — and read the registry back at step 1.
+
+Plus: surviving tabs that die (batching as the default, aim by DOM selector, never re-run a
+batch that died mid-write), reactive panels that ignore programmatic clicks, and a table of
+**fragile UI path → robust path** with the precondition each one needs.
+
+## How it was tested
+
+Four independent agents were given the skill cold, with realistic scenarios: a high-stakes
+two-account setup, a single-browser case, a panel that appeared logged out, a dropdown that
+would not respond, and an adversarial review.
+
+They scored the first version **6/10** and found twenty problems — among them a factual
+error in its own showcase example (the HTML-tag shortcut does not exist for Search Console
+*Domain* properties, which only accept DNS verification), a claim that IndexNow tells
+Google about new pages (it does not), a React recipe that fails on `contenteditable`, and a
+dead locale selector. All twenty are fixed in what you are reading.
 
 ## Install
 
@@ -45,7 +69,7 @@ Claude loads it automatically and invokes it when the task matches the descripti
 
 ## Adapt it
 
-Step 5 asks you to keep a registry mapping browser identifier → account → organization.
+Step 8 asks you to keep a registry mapping browser identifier → account → organization.
 Keep that file **outside** any repository you publish — it holds personal data and a map
 of who owns what. A starting shape:
 
