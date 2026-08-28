@@ -87,21 +87,32 @@ misses. Find the element and dispatch the full sequence, with the **right interf
 those take the wrong path. This is the most common cause of a `role=combobox` that "resists
 everything".
 
+`button` and `buttons` are **not constant across the sequence** — a real browser reports
+nothing pressed before the press and after the release, and `button: -1` on a move where no
+button changed. Sending `buttons: 1` on every event is a tell that some libraries check.
+
 ```js
-const r = el.getBoundingClientRect();
-const base = { bubbles: true, cancelable: true, composed: true, view: window,
-               button: 0, buttons: 1,
-               clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 };
-const ptr = { ...base, pointerId: 1, isPrimary: true, pointerType: 'mouse' };
+const r  = el.getBoundingClientRect();
+const at = { bubbles: true, cancelable: true, composed: true, view: window,
+             clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 };
+const hover = { ...at, button: -1, buttons: 0 };                // nothing pressed yet
+const down  = { ...at, button:  0, buttons: 1, pressure: 0.5 }; // primary held
+const up    = { ...at, button:  0, buttons: 0 };                // released
+const ptr   = { pointerId: 1, isPrimary: true, pointerType: 'mouse' };
 el.focus();
-el.dispatchEvent(new PointerEvent('pointerover', ptr));
-el.dispatchEvent(new MouseEvent('mouseover', base));
-el.dispatchEvent(new PointerEvent('pointerdown', ptr));
-el.dispatchEvent(new MouseEvent('mousedown', base));
-el.dispatchEvent(new PointerEvent('pointerup', ptr));
-el.dispatchEvent(new MouseEvent('mouseup', base));
-el.dispatchEvent(new MouseEvent('click', base));
+el.dispatchEvent(new PointerEvent('pointerover', { ...hover, ...ptr }));
+el.dispatchEvent(new MouseEvent  ('mouseover',   hover));
+el.dispatchEvent(new PointerEvent('pointermove', { ...hover, ...ptr }));
+el.dispatchEvent(new MouseEvent  ('mousemove',   hover));
+el.dispatchEvent(new PointerEvent('pointerdown', { ...down,  ...ptr }));
+el.dispatchEvent(new MouseEvent  ('mousedown',   down));
+el.dispatchEvent(new PointerEvent('pointerup',   { ...up,    ...ptr }));
+el.dispatchEvent(new MouseEvent  ('mouseup',     up));
+el.dispatchEvent(new MouseEvent  ('click',       { ...up, detail: 1 }));
 ```
+
+The `pointermove` is not decoration — a real pointer always emits at least one before the
+press, and `detail: 1` on the click matters because the constructor defaults it to 0.
 
 `isTrusted: false` does **not** stop handlers from running — it only withholds user
 activation, which is the separate failure mode above.
@@ -141,7 +152,7 @@ first, or you trade a slow path for a dead end.
 | Publish content | paste into the editor | the CMS **REST API** | application password / token |
 | Change DNS | registrar panel | the provider's **API** | zone token |
 | Read public social content | scroll the signed-in feed | the platform's **public API** | app credentials |
-| Verify a site in Search Console | DNS-provider menu | **HTML tag** for a URL-prefix property; **TXT record via the DNS API** for a Domain property | control of the HTML, or a zone token |
+| Verify a site in Search Console | DNS-provider menu | **HTML tag** for a URL-prefix property; a **TXT or CNAME record via the DNS API** for a Domain property, which accepts no other method. Using DNS on a URL-prefix property auto-verifies the Domain one too | control of the HTML, or a zone token |
 | Tell Bing, Yandex, Naver, Seznam or Yep about new pages | request indexing one by one | **IndexNow** — participants share submissions, so one endpoint reaches all; up to 10k URLs per request | a key file at the site root, or elsewhere on the same host declared via `keyLocation`, which then limits that key to URLs under that path |
 
 ⚠️ **Google is not an IndexNow participant.** It said in 2021 it would test the protocol and

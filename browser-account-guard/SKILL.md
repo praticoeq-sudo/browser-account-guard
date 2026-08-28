@@ -28,9 +28,15 @@ hours spent debugging a panel that "was logged out" and was simply the wrong acc
 > the API is not merely sturdier — it is the compatible one.
 
 **The structural cure:** one browser profile per organisation, each signed into exactly one
-account (`--user-data-dir=<path-per-org>` on Chrome/Edge, Firefox Multi-Account Containers,
-or one browser binary per client). Then "which browser" and "which account" become one
-question. Do this if you control the environment; everything below is mitigation.
+account — `--user-data-dir=<path-per-org>` on Chrome/Edge, `-P`/`--profile` on Firefox, or
+one browser binary per client. Then "which browser" and "which account" become one question.
+Since Chrome 136 a non-default `--user-data-dir` is required for remote debugging anyway, so
+for CDP automation this is no longer just advice. ⚠️ Firefox **Multi-Account Containers do
+not** achieve this: they isolate cookies inside a single profile while sharing history,
+extensions and cache, and no standard automation API can pick a container — with containers,
+steps 4 and 5 stay mandatory.
+
+Everything below is mitigation.
 
 For tabs that die, clicks that do not register and comboboxes that resist every event, see
 the companion skill **`flaky-browser-ui`**. This skill is about *which account*; that one is
@@ -107,15 +113,17 @@ chip ? chip.getAttribute('aria-label') : null   // carries the address in most l
 ```
 
 Match the `@` *inside that element* — never enumerate languages. **`null` means nothing
-matched**, not "logged out": the chip may sit in an iframe (this does not cross frames), the
-page may be a chooser, or the markup may have changed. Fall back to the primary source.
+matched**, not "logged out": `querySelector` crosses neither iframes nor shadow roots, the
+page may be a chooser, or the markup may have changed. Fall back to the primary source. This
+is an unofficial UI anchor and it will rot; where you hold OAuth for the same identity,
+`https://www.googleapis.com/oauth2/v3/userinfo` is the durable answer.
 
 **Outside Google**, identity has no shared shape. Known reads:
 
 | Panel | Prove identity by |
 |---|---|
-| WordPress | `GET /wp-json/wp/v2/users/me?context=edit` → `slug`, `capabilities`. 401 = not authenticated; 403 = authenticated but not allowed — do not conflate |
-| Cloudflare | `GET /client/v4/user/tokens/verify` for the token; the dashboard carries the account id in the URL path |
+| WordPress | `GET /wp-json/wp/v2/users/me?context=edit` → `slug`, `capabilities`. 401 = not authenticated. **403 here is almost never "insufficient permission"** — core does not capability-check this route — it means an invalid cookie nonce, a security plugin or a WAF |
+| Cloudflare | `GET /client/v4/accounts/{id}/tokens/verify` for an account-owned token — **the whole `/user/*` namespace fails for those**, `/user/tokens/verify` included. `/client/v4/accounts` needs *Account Settings Read*. The dashboard carries the account id in the URL path |
 | Meta Business | the `business_id` in the URL — and see step 5, it is not the ad account |
 | Registrar / other | read the account name in the page header, and treat it as weak evidence — prefer an API call that echoes the authenticated identity |
 
@@ -144,8 +152,10 @@ For a **metrics read**, the target includes the **date range**. A wrong period p
 wrong report just as surely as a wrong property.
 
 Confirm **permission**, not just presence: a WordPress `subscriber` is signed in and cannot
-publish; a *restricted* Search Console user cannot verify a property; read-only Ads access
-looks identical until the mutate fails.
+publish; a *restricted* Search Console user has read-only settings and no access to Removals
+or user administration; read-only Ads access looks identical until the mutate fails.
+(Verifying a property is not a panel permission at all — whoever can place the tag or the DNS
+record becomes an owner, whatever their current role.)
 
 ## Step 6 — Force the account (Google products)
 
@@ -178,7 +188,7 @@ Show exactly this, then wait:
 Account:  person@example.com        (proved via myaccount, 14:02)
 Target:   sc-domain:client.com      (read from resource_id)
 Action:   verify property via DNS TXT record
-Undo:     none — a removed property must be verified again from scratch
+Undo:     remove the TXT record; the property can be re-added and re-verified
 Proceed?
 ```
 
@@ -193,8 +203,11 @@ Proceed?
   `myaccount` breaks the sequence. Treat `null` there as **abort**, not as "carry on" — this
   is the one place where the secondary source outranks the primary, and where ambiguity must
   fail closed.
-- **Know the undo before you act** — Ads change history, WordPress revisions, and note where
-  there is none.
+- **Know the undo before you act** — Ads change history, WordPress revisions. Removing a
+  Search Console property is *not* the irreversible case people assume: the verification
+  token stays on the site, so re-adding and clicking Verify restores it. The genuinely
+  one-way actions are the ones that leave the system — a sent message, a payment, a post
+  already crawled.
 - Prefer a reversible shape: save as draft, stage it, dry-run it.
 
 ## Step 8 — Record what you learned
