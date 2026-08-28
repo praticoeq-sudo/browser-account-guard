@@ -19,7 +19,20 @@ when it was only the wrong browser, or the right browser on the wrong account.
 
 ---
 
-## Procedure
+## Step 0. Does this need a logged-in browser at all?
+
+Ask before anything else. If the task works on a **public page** — reading a site,
+measuring load time, taking a screenshot, checking markup, scraping something open — then
+**do not use the user's logged-in browser**. Use an isolated/headless browser instead.
+
+That choice removes the entire class of risk below: no account to confuse, no client data
+in scope, no session to disturb. Reach for the logged-in browser **only when the task
+genuinely requires the user's session.**
+
+> Caveat worth knowing: some embedded/preview browsers report `clientWidth: 0` and give
+> useless layout measurements. If you need real geometry, drive a real headless browser.
+
+## Procedure (when a logged-in session is genuinely required)
 
 ### 1. List the connected browsers
 
@@ -42,6 +55,10 @@ name. It may fail once with *"no browser responded"* — that is transient. Retr
 before concluding anything.
 
 ### 3. Prove the account — the step almost everyone skips
+
+**This step applies even when only one browser is connected.** One browser can hold five
+Google accounts, and the default is whichever was signed in first — not the one you want.
+Step 2 is about *which browser*; step 3 is about *which account*. They fail independently.
 
 Before you create, verify, save or delete anything:
 
